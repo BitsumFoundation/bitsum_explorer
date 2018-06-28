@@ -43,14 +43,14 @@
             if (xhrGetSearchBlockbyHeight) xhrGetSearchBlockbyHeight.abort();
 
             xhrGetSearchBlockbyHeight = $.ajax({
-                url: api_blockexplorer + '/json_rpc',
+                url: api + '/json_rpc',
                 method: "POST",
                 data: JSON.stringify({
                     jsonrpc:"2.0",
                     id: "blockbyheight",
                     method:"getblockheaderbyheight",
                     params: {
-                        height: parseInt(text)
+                        height: parseInt(text)+1
                     }
                 }),
                 dataType: 'json',
@@ -66,12 +66,12 @@
             var block, xhrGetSearchBlock;
             if (xhrGetSearchBlock) xhrGetSearchBlock.abort();
             xhrGetSearchBlock = $.ajax({
-                url: api_blockexplorer + '/json_rpc',
+                url: api + '/json_rpc',
                 method: "POST",
                 data: JSON.stringify({
                     jsonrpc:"2.0",
                     id: "GetSearchBlock",
-                    method:"f_block_json",
+                    method:"get_block_json",
                     params: {
                         hash: text // document.getElementById('txt_search').value // $('#txt_search').attr('value')
                     }
@@ -82,7 +82,7 @@
                     if(data.result){
                         block = data.result.block;
                         // window.location.href = getBlockchainUrl(text);
-                        window.location.href = getBlockchainUrl(block.hash);
+                        window.location.href = getBlockchainUrl(block.header.hash);
                     } else if(data.error) {
                         window.location.href = transactionExplorer.replace('{id}', text);
                     }
@@ -109,9 +109,11 @@
 </script>
 
 <div class="blocksStatHolder">
-    <span class="bg-primary">Total Blocks: <span id="networkLastReward"></span></span>
-    <span class="bg-primary">Hash Rate: <span id="networkHashrate"></span></span>
+    <span class="bg-primary">Current height: <span id="currentHeight"></span></span>
+    <span class="bg-primary">Hash rate: <span id="networkHashrate"></span></span>
     <span class="bg-primary">Difficulty: <span id="networkDifficulty"></span></span>
+    <span class="bg-primary">Network height: <span id="networkHeight"></span></span>
+    <span class="bg-primary">TX pool version: <span id="mempoolVersion"></span></span>
 </div>
 
 <hr>
@@ -119,13 +121,14 @@
 <div class="table-responsive">
     <table class="table table-hover">
         <thead>
-        <tr>
-            <th><i class="fa fa-bars"></i> Height</th>
-            <th><i class="fa fa-unlock-alt"></i> Size</th>
-            <th><i class="fa fa-paw"></i> Block Hash</th>
-            <th><i class="fa fa-clock-o"></i> Time Found</th>
-            <th><i class="fa fa-bars"></i> Transactions</th>
-        </tr>
+            <tr>
+                <th><i class="fa fa-bars"></i> Height</th>
+                <th><i class="fa fa fa-archive"></i> Size</th>
+                <th><i class="fa fa-tag"></i> Block Hash</th>
+                <th><i class="fa fa-clock-o"></i> Time Found</th>
+                <th><i class="fa fa fa-unlock-alt"></i> Difficulty</th>
+                <th><i class="fa fa-bars"></i> Transactions</th>
+            </tr>
         </thead>
         <tbody id="blocks_rows">
 
@@ -145,10 +148,12 @@
         },
         init: function(){
         },
-        update: function(){
-            updateText('networkLastReward', lastStats.network.height.toString());
-            updateText('networkHashrate', getReadableHashRateString(lastStats.network.difficulty / lastStats.config.coinDifficultyTarget) + '/sec');
-            updateText('networkDifficulty', lastStats.network.difficulty.toString());
+        update: function () {
+            updateText('currentHeight', networkStatus.top_block_height.format(0, 3));
+            updateText('networkHashrate', getReadableHashRateString(networkStatus.top_block_difficulty / 120) + '/sec');
+            updateText('networkDifficulty', networkStatus.top_block_difficulty.format(0, 3));
+            updateText('networkHeight', networkStatus.top_known_block_height.format(0, 3));
+            updateText('mempoolVersion', networkStatus.transaction_pool_version.format(0, 3));
             renderInitialBlocks();
         }
     };
@@ -157,12 +162,12 @@
     $('#loadMoreBlocks').click(function(){
         if (xhrGetBlocks) xhrGetBlocks.abort();
         xhrGetBlocks = $.ajax({
-            url: api_blockexplorer + '/json_rpc',
+            url: api + '/json_rpc',
             method: "POST",
             data: JSON.stringify({
                 jsonrpc:"2.0",
                 id: "test",
-                method:"f_blocks_list_json",
+                method:"get_blocks_json",
                 params: {
                     height: $('#blocks_rows').children().last().data('height')
                 }
@@ -178,14 +183,14 @@
     function renderInitialBlocks(){
         if (xhrGetBlocks) xhrGetBlocks.abort();
         xhrGetBlocks = $.ajax({
-            url: api_blockexplorer + '/json_rpc',
+            url: api + '/json_rpc',
             method: "POST",
             data: JSON.stringify({
                 jsonrpc:"2.0",
                 id: "test",
-                method:"f_blocks_list_json",
+                method:"get_blocks_json",
                 params: {
-                    height: lastStats.network.height
+                    height: networkStatus.top_block_height 
                 }
             }),
             dataType: 'json',
@@ -195,40 +200,7 @@
             }
         });
     };
-
-
-    function parseBlock(height, serializedBlock){
-        var parts = serializedBlock.split(':');
-        var block = {
-            height: parseInt(height),
-            hash: parts[0],
-            time: parts[1],
-            difficulty: parseInt(parts[2]),
-            shares: parseInt(parts[3]),
-            orphaned: parts[4],
-            reward: parts[5]
-        };
-
-        var toGo = lastStats.config.depth - (lastStats.network.height - block.height);
-        block.maturity = toGo < 1 ? '' : (toGo + ' to go');
-
-        switch (block.orphaned){
-            case '0':
-                block.status = 'unlocked';
-                break;
-            case '1':
-                block.status = 'orphaned';
-                break;
-            default:
-                block.status = 'pending';
-                break;
-        }
-
-        return block;
-    }
-
-
-
+    
     function getBlockRowElement(block, jsonString){
 
         var blockStatusClasses = {
@@ -245,17 +217,17 @@
         row.className = 'pending';
 //        row.className = blockStatusClasses[block.status];
         var columns =
-            '<td>' + block.height + '</td>' +
-            '<td>' + block.cumul_size + '</td>' +
+            '<td>' + block.height.format(0, 3) + '</td>' +
+            '<td>' + block.size.format(0, 3) + '</td>' +
             '<td>' + formatBlockLink(block.hash) + '</td>' +
             '<td>' + formatDate(block.timestamp) + '</td>' +
+            '<td>' + block.difficulty.format(0, 3) + '</td>' +
             '<td>' + block.tx_count + '</td>';
 
         row.innerHTML = columns;
 
         return row;
     }
-
 
     function renderBlocks(blocksResults){
 

@@ -78,31 +78,29 @@
 
 </style>
 
-
 <div id="siteInfo">
-    <!-- Description or information about this pool -->
 </div>
-
 
 <div class="row">
     <h3>Transaction</h3>
     <div class="col-md-12 stats">
-        <div><i class="fa fa-circle-o"></i> Hash: <span id="transaction.hash"></span></div>
-        <div><i class="fa fa-circle-o"></i> Fee: <span id="transaction.fee"></span></div>
-        <div><i class="fa fa-circle-o"></i> Sum of outputs: <span id="transaction.amount_out"></span></div>
-        <div><i class="fa fa-circle-o"></i> Size: <span id="transaction.size"></span></div>
-        <div id="div_transaction_paymentId"><i class="fa fa-circle-o"></i> Payment ID: <span id="transaction.paymentId"></span></div>
-        <div id="div_transaction_mixin"><i class="fa fa-circle-o"></i> Mixin count: <span id="transaction.mixin"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Hash: <span id="transaction.hash"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Unlock height: <span id="transaction.unlock_time"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Sum of inputs: <span id="transaction.amount_in"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Sum of outputs: <span id="transaction.amount_out"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Fee: <span id="transaction.fee"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Mixin count: <span id="transaction.mixin"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Payment ID: <span id="transaction.payment_id"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Size: <span id="transaction.size"></span></div>
     </div>
 </div>
-
 
 <div class="row">
     <h3>From block</h3>
     <div class="col-md-12 stats">
-        <div><i class="fa fa-circle-o"></i> Hash: <span id="block.hash"></span></div>
-        <div><i class="fa fa-circle-o"></i> Height: <span id="block.height"></span></div>
-        <div><i class="fa fa-circle-o"></i> Timestamp: <span id="block.timestamp"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Hash: <span id="block.hash"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Height: <span id="block.height"></span></div>
+        <div><i class="fa fa-arrow-circle-o-right"></i> Timestamp: <span id="block.timestamp"></span></div>
     </div>
 </div>
 
@@ -115,8 +113,7 @@
             <th><i class="fa fa-paw"></i> Image</th>
         </tr>
         </thead>
-        <tbody id="inputs_rows">
-
+            <tbody id="inputs_rows">
         </tbody>
     </table>
 </div>
@@ -128,11 +125,10 @@
         <thead>
         <tr>
             <th><i class="fa fa-money"></i> Amount</th>
-            <th><i class="fa fa-paw"></i> Key</th>
+            <th><i class="fa fa-tag"></i> Key</th>
         </tr>
         </thead>
-        <tbody id="outputs_rows">
-
+            <tbody id="outputs_rows">
         </tbody>
     </table>
 </div>
@@ -154,12 +150,12 @@
     function renderTransaction(){
         if (xhrGetTransaction) xhrGetTransaction.abort();
         xhrGetTransaction = $.ajax({
-            url: api_blockexplorer + '/json_rpc',
+            url: api + '/json_rpc',
             method: "POST",
             data: JSON.stringify({
                 jsonrpc:"2.0",
                 id: "test",
-                method:"f_transaction_json",
+                method:"get_transaction_json",
                 params: {
                     hash: urlParam('hash')
                 }
@@ -167,45 +163,42 @@
             dataType: 'json',
             cache: 'false',
             success: function(data){
-                transaction = data.result.txDetails;
-                inputs = data.result.tx.vin;
-                outputs = data.result.tx.vout;
+                transaction = data.result.transaction_details;
+                inputs = data.result.transaction.vin;
+                outputs = data.result.transaction.vout;
                 block = data.result.block;
                 console.log(JSON.stringify(inputs));
 
                 updateText('transaction.hash', transaction.hash);
-                updateText('transaction.amount_out', getReadableCoins(transaction.amount_out));
-                updateText('transaction.fee', getReadableCoins(transaction.fee));
+                updateText('transaction.unlock_time', data.result.transaction.unlock_time.format(0, 3));
+                updateText('transaction.amount_in', (transaction.amount_in / coinbase).format(10, 3) + ticker);
+                updateText('transaction.amount_out', (transaction.amount_out / coinbase).format(10, 3) + ticker);
+                updateText('transaction.fee', (transaction.fee / coinbase).format(4, 3) + ticker);
                 updateText('transaction.mixin', transaction.mixin);
-                if (!transaction.mixin)
-                    $('#div_transaction_mixin').hide();
-                updateText('transaction.paymentId', transaction.paymentId);
-                if (!transaction.paymentId)
-                    $('#div_transaction_paymentId').hide();
+                updateText('transaction.payment_id', transaction.payment_id);
                 updateText('transaction.size', transaction.size);
 
                 updateTextLinkable('block.hash', formatBlockLink(block.hash));
-                updateText('block.height', block.height);
+                updateText('block.height', block.height.format(0, 3));
                 updateText('block.timestamp', formatDate(block.timestamp));
+
                 renderInputs(inputs);
                 renderOutputs(outputs);
             }
         });
     }
 
-
     function getInputCells(input){
-        return '<td>' + getReadableCoins(input.value.amount) + '</td>' +
-            '<td>' + input.value.k_image + '</td>';
+        return '<td>' + (input.amount / coinbase).format(10, 3) + ticker + '</td>' +
+            '<td>' + input.key_image + '</td>';
     }
-
 
     function getInputRowElement(input, jsonString){
 
         var row = document.createElement('tr');
         row.setAttribute('data-json', jsonString);
-        row.setAttribute('data-k_image', input.value.k_image);
-        row.setAttribute('id', 'inputRow' + input.value.k_image);
+        row.setAttribute('data-k_image', input.k_image);
+        row.setAttribute('id', 'inputRow' + input.k_image);
 
         row.innerHTML = getInputCells(input);
 
@@ -219,12 +212,11 @@
         for (var i = 0; i < inputResults.length; i++){
 
             var input = inputResults[i];
-            if (!input.value.amount)
-                continue;
+            if (!input.amount) continue;
 
             var inputJson = JSON.stringify(input);
 
-            var existingRow = document.getElementById('inputRow' + input.value.k_image);
+            var existingRow = document.getElementById('inputRow' + input.key_image);
 
             if (existingRow && existingRow.getAttribute('data-json') !== inputJson){
                 $(existingRow).replaceWith(getInputRowElement(input, inputJson));
@@ -234,23 +226,20 @@
                 var inputElement = getInputRowElement(input, inputJson);
                 $inputsRows.append(inputElement);
             }
-
         }
     }
 
-
-    function getOutputCells(output){
-        return '<td>' + getReadableCoins(output.amount) + '</td>' +
-            '<td>' + output.target.data.key + '</td>';
+    function getOutputCells(output) {
+        return '<td>' + (output.amount / coinbase).format(10, 3) + ticker + '</td>' +
+            '<td>' + output.target.key + '</td>';
     }
-
-
+    
     function getOutputRowElement(output, jsonString){
 
         var row = document.createElement('tr');
         row.setAttribute('data-json', jsonString);
-        row.setAttribute('data-k_image', output.target.data.key);
-        row.setAttribute('id', 'outputRow' + output.target.data.key);
+        row.setAttribute('data-k_image', output.target.key);
+        row.setAttribute('id', 'outputRow' + output.target.key);
 
         row.innerHTML = getOutputCells(output);
 
@@ -267,7 +256,7 @@
 
             var outputJson = JSON.stringify(output);
 
-            var existingRow = document.getElementById('outputRow' + output.target.data.key);
+            var existingRow = document.getElementById('outputRow' + output.target.key);
 
             if (existingRow && existingRow.getAttribute('data-json') !== outputJson){
                 $(existingRow).replaceWith(getOutputRowElement(output, outputJson));
@@ -280,4 +269,5 @@
 
         }
     }
+
 </script>
